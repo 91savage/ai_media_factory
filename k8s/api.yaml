@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: ai-media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+      - name: api-server
+        # 로컬에서 빌드할 도커 이미지 이름
+        image: ai-media-api:latest 
+        # 레지스트리(Docker Hub 등)에서 다운받지 않고 무조건 로컬 이미지를 사용하도록 강제
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          # 앞서 만든 redis-service 의 이름 (K8s 내부 DNS가 알아서 찾아줌!)
+          value: redis-service      
+        - name: REDIS_PORT
+          value: "6379"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: ai-media
+spec:
+  selector:
+    app: api-server
+  ports:
+  - port: 80
+    targetPort: 8000
+  # 로컬(Mac) 브라우저에서 쉽게 접속하기 위해 포트를 노출
+  type: NodePort

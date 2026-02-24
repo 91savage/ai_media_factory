@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: ai-media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+      - name: n8n
+        image: docker.n8n.io/n8nio/n8n:latest
+        ports:
+        - containerPort: 5678
+        env:
+        - name: N8N_BASIC_AUTH_ACTIVE
+          value: "false" # 로컬 테스트의 편의성을 위해 기본 인증 비활성화
+        - name: GENERIC_TIMEZONE
+          value: "Asia/Seoul"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-service
+  namespace: ai-media
+spec:
+  selector:
+    app: n8n
+  ports:
+  - port: 5678
+    targetPort: 5678
+  type: NodePort

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ai_media_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: ai_media_api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    # 로컬 개발 시 코드를 수정하면 바로 반영되도록 볼륨 마운트
+    volumes:
+      - ./api:/app
+    # uvicorn의 hot-reload 기능 활성화
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  redis_data:
