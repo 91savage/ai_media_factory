@@ -1,0 +1,59 @@
+# AI Media Factory
+
+텍스트 프롬프트를 받아 비동기적으로 이미지를 생성하고 Telegram 알림을 보내는 이벤트 주도(Event-Driven) 마이크로서비스 파이프라인. K8s의 오케스트레이션과 n8n의 워크플로우를 결합한 시스템입니다.
+
+## 아키텍처 개요
+1. **API Server (FastAPI)**: 사용자의 텍스트 프롬프트를 수신하고 작업 ID를 부여하여 Redis 큐에 넣습니다(Push).
+2. **Message Queue (Redis)**: 비동기 작업 처리를 위한 메시지 브로커 역할을 수행합니다.
+3. **AI Worker (Python)**: 큐를 모니터링하다가 작업이 들어오면 꺼내어 처리하고(현재는 5초 지연 시뮬레이터 적용), 완성된 결과(가짜 이미지 URL)를 Webhook으로 쏩니다.
+4. **n8n Workflow**: Worker가 발송한 처리 결과를 Webhook으로 받아 Telegram 등으로 메시지를 발송하는 후처리(배송)를 담당합니다.
+
+## 시스템 요구사항
+- Docker
+- Kubernetes 클러스터 (e.g., Kind, Minikube 등)
+- `kubectl` 커맨드라인 툴
+
+## 배포 및 실행 가이드 (Local K8s 환경)
+
+### 1단계: 도커 이미지 빌드 및 K8s 로드
+```bash
+# API Server 이미지 빌드 및 로드
+docker build -t ai-media-api:latest ./api
+kind load docker-image ai-media-api:latest --name <클러스터명>
+
+# AI Worker 이미지 빌드 및 로드
+docker build -t ai-media-worker:latest ./worker
+kind load docker-image ai-media-worker:latest --name <클러스터명>
+```
+
+### 2단계: K8s 매니페스트 적용
+```bash
+# 네임스페이스 및 Redis 배포
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/redis.yaml
+
+# API, Worker, n8n 배포
+kubectl apply -f k8s/api.yaml
+kubectl apply -f k8s/worker.yaml
+kubectl apply -f k8s/n8n.yaml
+```
+
+### 3단계: n8n 워크플로우 셋팅 (최초 1회)
+1. n8n UI 포트포워딩 실행:
+   ```bash
+   kubectl port-forward svc/n8n-service -n ai-media 5678:5678
+   ```
+2. 웹 브라우저(`http://localhost:5678`)에 접속하여 워크플로우 생성
+3. **Webhook 노드** 생성 후 Path를 `ai-media-result`로, Method를 `POST`로 설정.
+4. **Telegram 노드**를 뒤에 연결하여 결과를 메세지로 받도록 세팅.
+
+### 4단계: 테스트 로직 수행
+1. API 포트포워딩 실행:
+   ```bash
+   kubectl port-forward svc/api-service -n ai-media 8000:80
+   ```
+2. 이미지 생성 요청 발송 (curl 등 이용):
+   ```bash
+   curl -X POST "http://localhost:8000/generate-image?prompt=dog_playing_in_park"
+   ```
+3. Telegram으로 알림이 오는지 최종 확인!
