@@ -23,6 +23,26 @@ spec:
           value: "false" # 로컬 테스트의 편의성을 위해 기본 인증 비활성화
         - name: GENERIC_TIMEZONE
           value: "Asia/Seoul"
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-pvc
+  namespace: ai-media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 
 ---
 apiVersion: v1
@@ -36,4 +56,5 @@ spec:
   ports:
   - port: 5678
     targetPort: 5678
+  # 로컬 테스트용 포트 개방
   type: NodePort
