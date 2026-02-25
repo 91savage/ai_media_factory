@@ -1,0 +1,138 @@
+{
+  "name": "AI Media Factory - Telegram ChatOps",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger-node",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        200
+      ],
+      "webhookId": "ai-media-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://api-service:80/generate-image",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.message.text }}"
+            },
+            {
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-request-node",
+      "name": "Call API Server",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        420,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=⏳ 접수 완료! 5초 뒤 이미지가 완성됩니다.\n\n[요청 프롬프트]: {{$json.prompt}}",
+        "additionalFields": {}
+      },
+      "id": "telegram-reply-node",
+      "name": "Send Acknowledgment",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        640,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-media-result",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook (Receive Result)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "ai-media-result"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.body.chat_id }}",
+        "text": "=✅ [AI Media Factory] 작업 완료\n\nTask ID: {{$json.body.task_id}}\nPrompt: {{$json.body.prompt}}\n\nImage URL:\n{{$json.body.image_url}}",
+        "additionalFields": {}
+      },
+      "id": "telegram-result-node",
+      "name": "Send Final Image",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        420,
+        400
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call API Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call API Server": {
+      "main": [
+        [
+          {
+            "node": "Send Acknowledgment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (Receive Result)": {
+      "main": [
+        [
+          {
+            "node": "Send Final Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "chatops-v1-uuid"
+}
