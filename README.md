@@ -46,7 +46,7 @@ kubectl apply -f k8s/n8n.yaml
 2. 웹 브라우저(`http://localhost:5678`)에 접속합니다.
 3. 레포지토리에 포함된 `n8n-workflows/telegram_notification.json` 파일을 n8n 화면에 Import(오른쪽 위 메뉴 > Import from File 등) 합니다.
 4. **Telegram 노드** 내부 설정에 들어가 본인의 **Telegram Bot Credentials** 정보와 **Chat ID**를 기입합니다.
-5. 설정 완료 후 웹 에디터 우측 상단의 **`Active` 스위치**를 꼭 켜줍니다.
+5. 설정 완료 후 웹 에디터 우측 상단의 **`Publish` 버튼**을 꼭 켜서 워크플로우를 활성화합니다.
 
 ### 4단계: 테스트 로직 수행
 1. API 포트포워딩 실행:
