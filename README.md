@@ -74,9 +74,15 @@ kubectl apply -f k8s/n8n.yaml
    npx --yes localtunnel --port 5678 > localtunnel.log 2>&1 &
    ```
 2. 생성된 HTTPS 주소를 확인합니다.
-   ```bash
-   sleep 2 && cat localtunnel.log
-   # 출력 예시: your url is: https://blue-lizards-poke.loca.lt
+3. 발급받은 `https://...` 주소를 복사합니다.
+4. `k8s/n8n.yaml` 파일을 열고, `env` 섹션의 `WEBHOOK_URL` 값을 복사한 주소로 변경합니다.
+   ```yaml
+           - name: WEBHOOK_URL
+             value: "https://blue-lizards-poke.loca.lt" # 여기에 붙여넣기
    ```
-3. `http://localhost:5678` 로 n8n에 접속한 뒤, **`Settings` (좌측 하단 톱니바퀴) > `Webhook URL`** 에 위에서 발급받은 `https://...` 주소를 붙여넣습니다.
-4. `n8n-workflows/telegram_chatops.json` 워크플로우를 활성화(Active)하고 텔레그램 봇에게 채팅을 걸어 테스트합니다.
+5. 변경된 K8s 설정을 적용하고 n8n 파드를 재시작합니다.
+   ```bash
+   kubectl apply -f k8s/n8n.yaml
+   kubectl rollout restart deployment n8n -n ai-media
+   ```
+6. `http://localhost:5678` 로 n8n에 접속한 뒤, `n8n-workflows/telegram_chatops.json` 워크플로우를 Publish(활성화)하고 텔레그램 봇에게 채팅을 걸어 테스트합니다.

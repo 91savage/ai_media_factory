@@ -23,6 +23,10 @@ spec:
           value: "false" # 로컬 테스트의 편의성을 위해 기본 인증 비활성화
         - name: GENERIC_TIMEZONE
           value: "Asia/Seoul"
+        - name: WEBHOOK_URL
+          value: "https://blue-lizards-poke.loca.lt" # localtunnel 등 연결 시 임시 주소로 변경 후 apply
+        - name: N8N_PROXY_HOPS
+          value: "1"
         volumeMounts:
         - name: n8n-data
           mountPath: /home/node/.n8n
