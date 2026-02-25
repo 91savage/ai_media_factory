@@ -62,7 +62,13 @@ kubectl apply -f k8s/n8n.yaml
 ### 5단계: Telegram ChatOps 테스트 준비 (Phase 4.2 전용)
 텔레그램 봇과 양방향 통신(ChatOps)을 구축하려면 텔레그램 서버가 우리 로컬 n8n으로 웹훅을 쏠 수 있어야 합니다. 텔레그램 정책상 **반드시 HTTPS 주소가 필요**하므로 `localtunnel`을 사용해 포트를 외부로 뚫어주어야 합니다.
 
-1. 터미널을 열고 n8n 포트를 HTTPS로 터널링하는 백그라운드 명령어를 실행합니다.
+> **💡 필수 전제조건 (Port-Forwarding):**
+> localtunnel은 우리 PC(Mac)의 5678번 포트를 인터넷과 이어줄 뿐입니다. 따라서 터널을 뚫기 전에 **반드시 다른 터미널 창에서 K8s n8n 포트포워딩이 살아서 유지되고 있어야** 통신이 전달됩니다!
+> ```bash
+> kubectl port-forward svc/n8n-service -n ai-media 5678:5678
+> ```
+
+1. **새로운 터미널 탭**을 하나 더 열어, 해당 5678 포트를 HTTPS로 터널링하는 백그라운드 명령어를 실행합니다.
    ```bash
    # npx 설치 동의(y) 메시지가 보이지 않도록 --yes 옵션을 추가합니다.
    npx --yes localtunnel --port 5678 > localtunnel.log 2>&1 &
