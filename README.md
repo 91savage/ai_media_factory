@@ -53,8 +53,24 @@ kubectl apply -f k8s/n8n.yaml
    ```bash
    kubectl port-forward svc/api-service -n ai-media 8000:80
    ```
-2. 이미지 생성 요청 발송 (curl 등 이용):
+2. 이미지 생성 요청 발송 (웹 브라우저에서 `http://localhost:8000` 직접 접속 또는 curl 이용):
    ```bash
    curl -X POST "http://localhost:8000/generate-image?prompt=dog_playing_in_park"
    ```
 3. Telegram으로 알림이 오는지 최종 확인!
+
+### 5단계: Telegram ChatOps 테스트 준비 (Phase 4.2 전용)
+텔레그램 봇과 양방향 통신(ChatOps)을 구축하려면 텔레그램 서버가 우리 로컬 n8n으로 웹훅을 쏠 수 있어야 합니다. 텔레그램 정책상 **반드시 HTTPS 주소가 필요**하므로 `localtunnel`을 사용해 포트를 외부로 뚫어주어야 합니다.
+
+1. 터미널을 열고 n8n 포트를 HTTPS로 터널링하는 백그라운드 명령어를 실행합니다.
+   ```bash
+   # npx 설치 동의(y) 메시지가 보이지 않도록 --yes 옵션을 추가합니다.
+   npx --yes localtunnel --port 5678 > localtunnel.log 2>&1 &
+   ```
+2. 생성된 HTTPS 주소를 확인합니다.
+   ```bash
+   sleep 2 && cat localtunnel.log
+   # 출력 예시: your url is: https://blue-lizards-poke.loca.lt
+   ```
+3. `http://localhost:5678` 로 n8n에 접속한 뒤, **`Settings` (좌측 하단 톱니바퀴) > `Webhook URL`** 에 위에서 발급받은 `https://...` 주소를 붙여넣습니다.
+4. `n8n-workflows/telegram_chatops.json` 워크플로우를 활성화(Active)하고 텔레그램 봇에게 채팅을 걸어 테스트합니다.
