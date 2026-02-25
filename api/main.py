@@ -1,4 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import FileResponse
 import redis
 import uuid
 import os
@@ -9,6 +10,11 @@ app = FastAPI(title="AI Media Factory API")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+
+@app.get("/", response_class=FileResponse)
+async def serve_frontend():
+    """웹 UI 프론트엔드 서빙"""
+    return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 @app.post("/generate-image")
 async def generate_image(prompt: str):
