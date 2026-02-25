@@ -86,3 +86,4 @@ kubectl apply -f k8s/n8n.yaml
    kubectl rollout restart deployment n8n -n ai-media
    ```
 6. `http://localhost:5678` 로 n8n에 접속한 뒤, `n8n-workflows/telegram_chatops.json` 워크플로우를 Publish(활성화)하고 텔레그램 봇에게 채팅을 걸어 테스트합니다.
+   - **⚠️ 중요 주의사항 (Webhook 재등록):** 만약 터널을 껐다 켜서 URL이 바뀌었거나 봇이 메세지에 응답하지 않는다면, 현재 켜져 있는 **[Active] / Publish 스위치를 한 번 껐다가 2초 뒤 다시 켜주세요.** 껐다 켜는 순간 n8n이 텔레그램 서버로 바뀐 Webhook URL을 자동으로 재전송(업데이트)합니다.

@@ -49,7 +49,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=⏳ 접수 완료! 5초 뒤 이미지가 완성됩니다.\n\n[요청 프롬프트]: {{$json.prompt}}",
+        "text": "=⏳ 접수 완료! 5초 뒤 이미지가 완성됩니다.",
         "additionalFields": {}
       },
       "id": "telegram-reply-node",
