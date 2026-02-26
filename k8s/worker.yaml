@@ -24,3 +24,8 @@ spec:
           value: "6379"
         - name: N8N_WEBHOOK_URL
           value: "http://n8n-service:5678/webhook/ai-media-result"
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gemini-secret
+              key: GEMINI_API_KEY

@@ -49,7 +49,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "=⏳ 접수 완료! 5초 뒤 이미지가 완성됩니다.",
+        "text": "=\u23f3 \uc811\uc218 \uc644\ub8cc! 5\ucd08 \ub4a4 \uc774\ubbf8\uc9c0\uac00 \uc644\uc131\ub429\ub2c8\ub2e4.",
         "additionalFields": {}
       },
       "id": "telegram-reply-node",
@@ -81,13 +81,28 @@
     {
       "parameters": {
         "chatId": "={{ $json.body.chat_id }}",
-        "text": "=✅ [AI Media Factory] 작업 완료\n\nTask ID: {{$json.body.task_id}}\nPrompt: {{$json.body.prompt}}\n\nImage URL:\n{{$json.body.image_url}}",
+        "operation": "sendPhoto",
+        "file": "data",
+        "caption": "=\u2705 [AI Media Factory] \uc791\uc5c5 \uc644\ub8cc\n\nTask ID: {{$json.body.task_id}}\nPrompt: {{$json.body.prompt}}{{ $json.body.error ? '\\n\\n\u274c \uc5d0\ub7ec: ' + $json.body.error : '' }}",
         "additionalFields": {}
       },
       "id": "telegram-result-node",
       "name": "Send Final Image",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
+      "position": [
+        640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nif (item.json.body.error) {\n  return item;\n}\nitem.binary = {\n  data: {\n    data: item.json.body.image_base64,\n    mimeType: 'image/png',\n    fileName: 'image.png'\n  }\n};\nreturn item;"
+      },
+      "id": "base64-to-binary",
+      "name": "Parse Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         420,
         400
@@ -119,6 +134,17 @@
       ]
     },
     "Webhook (Receive Result)": {
+      "main": [
+        [
+          {
+            "node": "Parse Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Base64": {
       "main": [
         [
           {

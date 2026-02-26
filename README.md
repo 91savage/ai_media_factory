@@ -80,7 +80,7 @@ kubectl apply -f k8s/n8n.yaml
            - name: WEBHOOK_URL
              value: "https://blue-lizards-poke.loca.lt" # 여기에 붙여넣기
    ```
-5. 변경된 K8s 설정을 적용하고 n8n 파드를 재시작합니다.
+5. 변경된 K8s 설정을 n8n.yaml에 적용하고 n8n 파드를 재시작합니다.
    ```bash
    kubectl apply -f k8s/n8n.yaml
    kubectl rollout restart deployment n8n -n ai-media
