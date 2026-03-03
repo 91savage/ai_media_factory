@@ -3,6 +3,8 @@ from fastapi.responses import FileResponse
 import redis
 import uuid
 import os
+import logging
+from kubernetes import client, config
 
 app = FastAPI(title="AI Media Factory API")
 
@@ -17,6 +19,64 @@ async def serve_frontend():
     return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 import json
+
+@app.get("/k8s-waste")
+def get_k8s_waste():
+    """k8s 클러스터 내부의 낭비되는 자원(좀비 Pod, 고아 PVC 등)을 수집합니다."""
+    waste_report = {
+        "zombie_pods": [],
+        "unbound_pvcs": [],
+        "empty_deployments": [],
+        "mock_data": False
+    }
+    
+    try:
+        # 클러스터 내부(Pod 안)에서 실행될 때 권한 획득
+        try:
+            config.load_incluster_config()
+        except config.config_exception.ConfigException:
+            # 로컬(맥북)에서 직접 파이썬 스크립트 띄울 때 테스트용
+            config.load_kube_config()
+            
+        v1 = client.CoreV1Api()
+        apps_v1 = client.AppsV1Api()
+        
+        # 1. 낭비되는 Pod (CrashLoopBackOff, Error, Evicted 등)
+        pods = v1.list_pod_for_all_namespaces().items
+        for pod in pods:
+            if pod.status.phase in ["Failed", "Unknown"]:
+                waste_report["zombie_pods"].append({"name": pod.metadata.name, "namespace": pod.metadata.namespace, "status": pod.status.phase})
+            elif pod.status.container_statuses:
+                for cs in pod.status.container_statuses:
+                    if cs.state.waiting and cs.state.waiting.reason in ["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull"]:
+                        waste_report["zombie_pods"].append({"name": pod.metadata.name, "namespace": pod.metadata.namespace, "status": cs.state.waiting.reason})
+        
+        # 2. 연결되지 않은 고아 PVC (Pending/Lost)
+        pvcs = v1.list_persistent_volume_claim_for_all_namespaces().items
+        for pvc in pvcs:
+            if pvc.status.phase != "Bound":
+                capacity = pvc.status.capacity.get('storage', 'Unknown') if pvc.status.capacity else 'Unknown'
+                waste_report["unbound_pvcs"].append({"name": pvc.metadata.name, "namespace": pvc.metadata.namespace, "status": pvc.status.phase, "capacity": capacity})
+        
+        # 3. 레플리카가 0인 Deployment (방치된 껍데기)
+        deployments = apps_v1.list_deployment_for_all_namespaces().items
+        for dep in deployments:
+            if dep.spec.replicas == 0:
+                waste_report["empty_deployments"].append({"name": dep.metadata.name, "namespace": dep.metadata.namespace})
+                
+    except Exception as e:
+        # k8s 연결 실패 시 모의(Mock) 데이터 반환
+        logging.error(f"K8s API 연결 실패, 모의 데이터 반환: {e}")
+        waste_report["mock_data"] = True
+        waste_report["zombie_pods"] = [
+            {"name": "frontend-dev-pod-a1b2", "namespace": "dev-namespace", "status": "CrashLoopBackOff"},
+            {"name": "batch-job-old-version", "namespace": "default", "status": "Evicted"}
+        ]
+        waste_report["unbound_pvcs"] = [
+            {"name": "db-backup-pvc-2023", "namespace": "ai-media", "status": "Pending", "capacity": "50Gi"}
+        ]
+        
+    return waste_report
 
 @app.post("/generate-image")
 async def generate_image(prompt: str, chat_id: str = None):
