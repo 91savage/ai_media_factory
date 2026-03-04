@@ -5,6 +5,7 @@ import uuid
 import os
 import logging
 from kubernetes import client, config
+import boto3
 
 app = FastAPI(title="AI Media Factory API")
 
@@ -19,6 +20,46 @@ async def serve_frontend():
     return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 import json
+
+@app.get("/aws-waste")
+def get_aws_waste():
+    """AWS 계정 내의 낭비되는 자원(고아 EBS, 방치된 EIP 등)을 수집합니다."""
+    waste_report = {
+        "unattached_ebs_volumes": [],
+        "unassociated_eips": [],
+        "error": None
+    }
+    
+    try:
+        # boto3는 환경변수(AWS_ACCESS_KEY_ID 등)를 자동으로 읽어서 인증합니다.
+        ec2 = boto3.client('ec2')
+        
+        # 1. 연결되지 않은 고아 EBS 볼륨 찾기 (상태가 'available'인 것들)
+        volumes = ec2.describe_volumes(Filters=[{'Name': 'status', 'Values': ['available']}])
+        for vol in volumes.get('Volumes', []):
+            volume_id = vol['VolumeId']
+            size = vol['Size']
+            volume_type = vol['VolumeType']
+            waste_report["unattached_ebs_volumes"].append({
+                "id": volume_id,
+                "size_gb": size,
+                "type": volume_type
+            })
+            
+        # 2. 할당되지 않은 탄력적 IP(EIP) 찾기 (AssociationId가 없는 것들)
+        addresses = ec2.describe_addresses()
+        for addr in addresses.get('Addresses', []):
+            if 'AssociationId' not in addr:
+                waste_report["unassociated_eips"].append({
+                    "ip": addr['PublicIp'],
+                    "allocation_id": addr['AllocationId']
+                })
+                
+    except Exception as e:
+        logging.error(f"AWS API 연결 또는 스캔 실패: {e}")
+        waste_report["error"] = str(e)
+        
+    return waste_report
 
 @app.get("/k8s-waste")
 def get_k8s_waste():
