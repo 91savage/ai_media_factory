@@ -21,45 +21,96 @@ async def serve_frontend():
 
 import json
 
-@app.get("/aws-waste")
-def get_aws_waste():
-    """AWS 계정 내의 낭비되는 자원(고아 EBS, 방치된 EIP 등)을 수집합니다."""
-    waste_report = {
+def _get_name_tag(tags):
+    for tag in (tags or []):
+        if tag['Key'] == 'Name':
+            return tag['Value']
+    return None
+
+
+def _scan_single_account(ec2_client, account_id: str) -> dict:
+    """boto3 ec2 클라이언트를 받아 해당 계정의 낭비 자원을 스캔합니다."""
+    report = {
+        "account_id": account_id,
         "unattached_ebs_volumes": [],
         "unassociated_eips": [],
         "error": None
     }
-    
     try:
-        # boto3는 환경변수(AWS_ACCESS_KEY_ID 등)를 자동으로 읽어서 인증합니다.
-        ec2 = boto3.client('ec2')
-        
-        # 1. 연결되지 않은 고아 EBS 볼륨 찾기 (상태가 'available'인 것들)
-        volumes = ec2.describe_volumes(Filters=[{'Name': 'status', 'Values': ['available']}])
+        volumes = ec2_client.describe_volumes(Filters=[{'Name': 'status', 'Values': ['available']}])
         for vol in volumes.get('Volumes', []):
-            volume_id = vol['VolumeId']
-            size = vol['Size']
-            volume_type = vol['VolumeType']
-            waste_report["unattached_ebs_volumes"].append({
-                "id": volume_id,
-                "size_gb": size,
-                "type": volume_type
+            report["unattached_ebs_volumes"].append({
+                "name": _get_name_tag(vol.get('Tags')),
+                "id": vol['VolumeId'],
+                "size_gb": vol['Size'],
+                "type": vol['VolumeType']
             })
-            
-        # 2. 할당되지 않은 탄력적 IP(EIP) 찾기 (AssociationId가 없는 것들)
-        addresses = ec2.describe_addresses()
+
+        addresses = ec2_client.describe_addresses()
         for addr in addresses.get('Addresses', []):
             if 'AssociationId' not in addr:
-                waste_report["unassociated_eips"].append({
+                report["unassociated_eips"].append({
+                    "name": _get_name_tag(addr.get('Tags')),
                     "ip": addr['PublicIp'],
                     "allocation_id": addr['AllocationId']
                 })
-                
     except Exception as e:
-        logging.error(f"AWS API 연결 또는 스캔 실패: {e}")
-        waste_report["error"] = str(e)
-        
-    return waste_report
+        logging.error(f"계정 {account_id} 스캔 중 오류: {e}")
+        report["error"] = str(e)
+    return report
+
+
+AWS_ACCOUNTS_CONFIG_PATH = os.getenv("AWS_ACCOUNTS_CONFIG_PATH", "/etc/aws-config/aws_accounts.json")
+
+@app.get("/aws-waste")
+def get_aws_waste():
+    """AWS 계정(들)의 낭비 자원을 수집합니다.
+
+    - 설정 파일 없음: 현재 자격증명 계정 단일 스캔
+    - 설정 파일 있음: 파일의 계정 목록을 STS AssumeRole로 순회하며 멀티 스캔
+    """
+    # 설정 파일 로드 시도
+    config = None
+    if os.path.exists(AWS_ACCOUNTS_CONFIG_PATH):
+        with open(AWS_ACCOUNTS_CONFIG_PATH, "r") as f:
+            config = json.load(f)
+
+    # 단일 계정 모드
+    if not config or not config.get("accounts"):
+        ec2 = boto3.client('ec2')
+        result = _scan_single_account(ec2, account_id="current")
+        result["name"] = "현재 계정"
+        return {"accounts": {"current": result}}
+
+    # 멀티 계정 모드
+    role_name = config.get("role_name", "WasteScannerRole")
+    accounts = config["accounts"]
+    sts = boto3.client('sts')
+    results = {}
+
+    for account in accounts:
+        account_id = account["id"]
+        account_name = account.get("name", account_id)
+        try:
+            assumed = sts.assume_role(
+                RoleArn=f"arn:aws:iam::{account_id}:role/{role_name}",
+                RoleSessionName="WasteScannerSession"
+            )
+            creds = assumed['Credentials']
+            ec2 = boto3.client(
+                'ec2',
+                aws_access_key_id=creds['AccessKeyId'],
+                aws_secret_access_key=creds['SecretAccessKey'],
+                aws_session_token=creds['SessionToken']
+            )
+            result = _scan_single_account(ec2, account_id)
+            result["name"] = account_name
+            results[account_id] = result
+        except Exception as e:
+            logging.error(f"계정 {account_name}({account_id}) AssumeRole 실패: {e}")
+            results[account_id] = {"account_id": account_id, "name": account_name, "error": str(e)}
+
+    return {"accounts": results}
 
 @app.get("/k8s-waste")
 def get_k8s_waste():

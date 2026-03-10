@@ -39,9 +39,17 @@ spec:
               name: aws-credentials-cp5
               key: AWS_DEFAULT_REGION
         - name: REDIS_HOST
-          value: redis-service      
+          value: redis-service
         - name: REDIS_PORT
           value: "6379"
+        volumeMounts:
+        - name: aws-accounts-config
+          mountPath: /etc/aws-config
+          readOnly: true
+      volumes:
+      - name: aws-accounts-config
+        configMap:
+          name: aws-accounts-config
 
 ---
 apiVersion: v1
