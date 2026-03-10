@@ -2,15 +2,20 @@
 
 텍스트 프롬프트를 받아 비동기적으로 이미지를 생성하고 Telegram 알림을 보내는 이벤트 주도(Event-Driven) 마이크로서비스 파이프라인. K8s의 오케스트레이션과 n8n의 워크플로우를 결합한 시스템입니다.
 
+## 주요 기능
+- **이미지 생성 파이프라인**: 텍스트 프롬프트 → Gemini Imagen API → Telegram 알림
+- **AWS 비용 최적화 봇**: 멀티 계정의 방치된 EBS 볼륨 / 미연결 EIP를 매일 스캔하여 Telegram으로 브리핑
+- **K8s 자원 낭비 탐지**: CrashLoopBackOff Pod, 고아 PVC, 레플리카 0 Deployment 감지
+
 ## 아키텍처 개요
-1. **API Server (FastAPI)**: 사용자의 텍스트 프롬프트를 수신하고 작업 ID를 부여하여 Redis 큐에 넣습니다(Push).
-2. **Message Queue (Redis)**: 비동기 작업 처리를 위한 메시지 브로커 역할을 수행합니다.
-3. **AI Worker (Python)**: 큐를 모니터링하다가 작업이 들어오면 꺼내어 처리하고(현재는 5초 지연 시뮬레이터 적용), 완성된 결과(가짜 이미지 URL)를 Webhook으로 쏩니다.
-4. **n8n Workflow**: Worker가 발송한 처리 결과를 Webhook으로 받아 Telegram 등으로 메시지를 발송하는 후처리(배송)를 담당합니다.
+1. **API Server (FastAPI)**: 이미지 생성 요청 수신 및 AWS/K8s 낭비 자원 스캔 엔드포인트 제공
+2. **Message Queue (Redis)**: 비동기 작업 처리를 위한 메시지 브로커
+3. **AI Worker (Python)**: Redis 큐를 모니터링하여 이미지 생성 작업을 처리하고 결과를 Webhook으로 전달
+4. **n8n Workflow**: Webhook 수신 및 스케줄 기반으로 Telegram 메시지 발송 담당
 
 ## 시스템 요구사항
 - Docker
-- Kubernetes 클러스터 (e.g., Kind, Minikube 등)
+- Kubernetes 클러스터 (Kind)
 - `kubectl` 커맨드라인 툴
 
 ## 배포 및 실행 가이드 (Local K8s 환경)
@@ -26,7 +31,50 @@ docker build -t ai-media-worker:latest ./worker
 kind load docker-image ai-media-worker:latest --name <클러스터명>
 ```
 
-### 2단계: K8s 매니페스트 적용
+> **이미지 코드 수정 후 재배포 시:**
+> ```bash
+> docker build -t ai-media-api:latest ./api
+> kind load docker-image ai-media-api:latest --name <클러스터명>
+> kubectl rollout restart deployment/api-server -n ai-media
+> ```
+
+### 2단계: AWS 계정 설정 (멀티 계정 스캔 사용 시)
+
+`config/aws_accounts.json`을 생성합니다 (이 파일은 `.gitignore`에 포함 — 커밋하지 마세요):
+```json
+{
+  "role_name": "aws-waste-scanner",
+  "accounts": [
+    {"id": "123456789012", "name": "계정명1"},
+    {"id": "987654321098", "name": "계정명2"}
+  ]
+}
+```
+
+K8s ConfigMap으로 등록:
+```bash
+kubectl create configmap aws-accounts-config \
+  --from-file=aws_accounts.json=config/aws_accounts.json \
+  -n ai-media
+```
+
+각 대상 계정의 IAM 역할(`aws-waste-scanner`)에 아래 Trust Policy 추가:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"AWS": "arn:aws:iam::<스캐너_계정ID>:root"},
+    "Action": "sts:AssumeRole"
+  }]
+}
+```
+
+스캐너 계정의 IAM 사용자/역할에 아래 권한 추가:
+- `sts:AssumeRole` (대상 계정 역할 Assume용)
+- `AmazonEC2ReadOnlyAccess` (자체 계정 스캔용, 역할에도 부여)
+
+### 3단계: K8s 매니페스트 적용
 ```bash
 # 네임스페이스 및 Redis 배포
 kubectl apply -f k8s/namespace.yaml
@@ -38,17 +86,19 @@ kubectl apply -f k8s/worker.yaml
 kubectl apply -f k8s/n8n.yaml
 ```
 
-### 3단계: n8n 워크플로우 셋팅 (최초 1회)
+### 4단계: n8n 워크플로우 셋팅 (최초 1회)
 1. n8n UI 포트포워딩 실행:
    ```bash
    kubectl port-forward svc/n8n-service -n ai-media 5678:5678
    ```
 2. 웹 브라우저(`http://localhost:5678`)에 접속합니다.
-3. 레포지토리에 포함된 `n8n-workflows/telegram_notification.json` 파일을 n8n 화면에 Import(오른쪽 위 메뉴 > Import from File 등) 합니다.
+3. 레포지토리에 포함된 워크플로우 파일을 n8n 화면에 Import(오른쪽 위 메뉴 > Import from File)합니다.
+   - `n8n-workflows/telegram_notification.json` — 이미지 생성 알림
+   - `n8n-workflows/aws_resource_diet.json` — AWS 비용 최적화 브리핑 (매일 10시)
 4. **Telegram 노드** 내부 설정에 들어가 본인의 **Telegram Bot Credentials** 정보와 **Chat ID**를 기입합니다.
 5. 설정 완료 후 웹 에디터 우측 상단의 **`Publish` 버튼**을 꼭 켜서 워크플로우를 활성화합니다.
 
-### 4단계: 테스트 로직 수행
+### 5단계: 테스트 로직 수행
 1. API 포트포워딩 실행:
    ```bash
    kubectl port-forward svc/api-service -n ai-media 8000:80
@@ -59,7 +109,7 @@ kubectl apply -f k8s/n8n.yaml
    ```
 3. Telegram으로 알림이 오는지 최종 확인!
 
-### 5단계: Telegram ChatOps 테스트 준비 (Phase 4.2 전용)
+### 6단계: Telegram ChatOps 테스트 준비 (Phase 4.2 전용)
 텔레그램 봇과 양방향 통신(ChatOps)을 구축하려면 텔레그램 서버가 우리 로컬 n8n으로 웹훅을 쏠 수 있어야 합니다. 텔레그램 정책상 **반드시 HTTPS 주소가 필요**하므로 `localtunnel`을 사용해 포트를 외부로 뚫어주어야 합니다.
 
 > **💡 필수 전제조건 (Port-Forwarding):**
