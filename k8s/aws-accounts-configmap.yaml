@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-accounts-config
+  namespace: ai-media
+data:
+  aws_accounts.json: |
+    {
+      "role_name": "aws-waste-scanner",
+      "accounts": [
+        {"id": "748501526749", "name": "Coinplug"},
+        {"id": "581179426828", "name": "Metadium"},
+        {"id": "553098371291", "name": "ISMS"},
+        {"id": "199965235560", "name": "Thepol"},
+        {"id": "409620190904", "name": "Stakehouse"},
+        {"id": "730335251390", "name": "e-mobility"},
+        {"id": "744763866084", "name": "Dapea"},
+        {"id": "367906863973", "name": "Soboroo"}
+      ]
+    }

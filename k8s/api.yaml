@@ -13,7 +13,6 @@ spec:
       labels:
         app: api-server
     spec:
-      serviceAccountName: k8s-waste-scanner-sa
       containers:
       - name: api-server
         # 로컬에서 빌드할 도커 이미지 이름
@@ -38,10 +37,6 @@ spec:
             secretKeyRef:
               name: aws-credentials-cp5
               key: AWS_DEFAULT_REGION
-        - name: REDIS_HOST
-          value: redis-service
-        - name: REDIS_PORT
-          value: "6379"
         volumeMounts:
         - name: aws-accounts-config
           mountPath: /etc/aws-config
